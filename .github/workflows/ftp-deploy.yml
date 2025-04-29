@@ -1,4 +1,4 @@
-name: SFTP Deploy
+name: SFTP Deploy with LFS support
 
 on:
   push:
@@ -8,10 +8,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout code with LFS
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          lfs: true
+
+      - name: Pull LFS objects
+        run: git lfs pull
 
       - name: SFTP Deploy
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
