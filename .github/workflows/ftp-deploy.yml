@@ -1,4 +1,4 @@
-name: SFTP Deploy with LFS support
+name: SFTP Deploy with LFS support and URL list generation
 
 on:
   push:
@@ -16,6 +16,39 @@ jobs:
 
       - name: Pull LFS objects
         run: git lfs pull
+        
+      - name: Generate file URLs list
+        run: |
+          echo "Generating URLs list for deployed files..."
+          mkdir -p ./tmp
+          BASE_URL="${{ secrets.BASE_URL }}"
+          FILE_LIST="./tmp/deployed_files_urls.txt"
+          echo "# Files deployed on $(date)" > $FILE_LIST
+          echo "# Base URL: $BASE_URL" >> $FILE_LIST
+          echo "" >> $FILE_LIST
+          
+          # Find all files, exclude git files, the tmp directory, README.md and other common non-content files
+          find . -type f \
+            -not -path "*/\.*" \
+            -not -path "*/tmp/*" \
+            -not -path "*/README.md" \
+            -not -path "*/LICENSE" \
+            -not -path "*/.gitignore" \
+            -not -path "*/.gitattributes" \
+            -not -path "*/CHANGELOG.md" \
+            -not -path "*/CONTRIBUTING.md" \
+            -not -path "*/.github/*" \
+            | sort | while read -r file; do
+            # Remove leading ./ from file path
+            rel_path="${file#./}"
+            # Add URL to the list
+            echo "$BASE_URL/$rel_path" >> $FILE_LIST
+          done
+          
+          echo "Generated URLs list with $(grep -c "^$BASE_URL" $FILE_LIST) files"
+          
+          # Optional: Display first few lines for debugging
+          head -n 10 $FILE_LIST
 
       - name: SFTP Deploy
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
@@ -26,4 +59,15 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local_path: ./*
           remote_path: ${{ secrets.FTP_DIRECTORY }}
+          sftp_only: true
+          
+      - name: Upload URL list file to SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ secrets.FTP_SERVER }}
+          port: 22
+          password: ${{ secrets.FTP_PASSWORD }}
+          local_path: ./tmp/deployed_files_urls.txt
+          remote_path: ${{ secrets.FTP_DIRECTORY }}/packages.txt
           sftp_only: true
