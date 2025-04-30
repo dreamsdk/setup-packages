@@ -17,15 +17,24 @@ jobs:
       - name: Pull LFS objects
         run: git lfs pull
         
-      - name: Generate file URLs list
+      - name: Generate file URLs list and directories list
         run: |
-          echo "Generating URLs list for deployed files..."
+          echo "Generating URLs list and directories list for deployed files..."
           mkdir -p ./tmp
           BASE_URL="${{ secrets.BASE_URL }}"
-          FILE_LIST="./tmp/deployed_files_urls.txt"
-          echo "# Files deployed on $(date)" > $FILE_LIST
-          echo "# Base URL: $BASE_URL" >> $FILE_LIST
-          echo "" >> $FILE_LIST
+          
+          # Remove trailing slash from BASE_URL if present
+          BASE_URL="${BASE_URL%/}"
+          
+          FILES_LIST="./tmp/deployed_files_urls.txt"
+          DIRS_LIST="./tmp/directories.txt"
+          
+          echo "# Files deployed on $(date)" > $FILES_LIST
+          echo "# Base URL: $BASE_URL" >> $FILES_LIST
+          echo "" >> $FILES_LIST
+          
+          echo "# Directories for files deployed on $(date)" > $DIRS_LIST
+          echo "" >> $DIRS_LIST
           
           # Find all files, exclude git files, the tmp directory, README.md and other common non-content files
           find . -type f \
@@ -41,14 +50,29 @@ jobs:
             | sort | while read -r file; do
             # Remove leading ./ from file path
             rel_path="${file#./}"
-            # Add URL to the list
-            echo "$BASE_URL/$rel_path" >> $FILE_LIST
+            
+            # Add URL to the files list
+            echo "$BASE_URL/$rel_path" >> $FILES_LIST
+            
+            # Extract directory structure and convert forward slashes to backslashes
+            dir_path=$(dirname "$rel_path")
+            if [ "$dir_path" != "." ]; then
+              # Replace forward slashes with backslashes and add to directories list
+              echo "${dir_path//\//\\}" >> $DIRS_LIST
+            else
+              # If file is in root directory, add an empty line to keep the lists in sync
+              echo "" >> $DIRS_LIST
+            fi
           done
           
-          echo "Generated URLs list with $(grep -c "^$BASE_URL" $FILE_LIST) files"
+          echo "Generated URLs list with $(grep -c "^$BASE_URL" $FILES_LIST) files"
+          echo "Generated directories list with $(grep -v "^$" $DIRS_LIST | wc -l) directories"
           
           # Optional: Display first few lines for debugging
-          head -n 10 $FILE_LIST
+          echo "Sample URLs:"
+          head -n 10 $FILES_LIST
+          echo "Sample directories:"
+          head -n 10 $DIRS_LIST
 
       - name: SFTP Deploy
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
@@ -61,13 +85,13 @@ jobs:
           remote_path: ${{ secrets.FTP_DIRECTORY }}
           sftp_only: true
           
-      - name: Upload URL list file to SFTP
+      - name: Upload URL list and directories files to SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           username: ${{ secrets.FTP_USERNAME }}
           server: ${{ secrets.FTP_SERVER }}
           port: 22
           password: ${{ secrets.FTP_PASSWORD }}
-          local_path: ./tmp/deployed_files_urls.txt
-          remote_path: ${{ secrets.FTP_DIRECTORY }}/packages.txt
+          local_path: ./tmp/*
+          remote_path: ${{ secrets.FTP_DIRECTORY }}/
           sftp_only: true
