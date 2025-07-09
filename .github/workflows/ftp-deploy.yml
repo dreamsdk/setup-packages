@@ -93,6 +93,16 @@ jobs:
           local_path: ./*
           remote_path: ${{ secrets.FTP_DIRECTORY }}
           sftp_only: true
+          exclude: |
+            README.md
+            tmp/
+            .git/
+            .github/
+            .gitignore
+            .gitattributes
+            LICENSE
+            CHANGELOG.md
+            CONTRIBUTING.md
           
       - name: Upload URL list and directories files to SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
