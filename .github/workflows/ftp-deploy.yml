@@ -26,8 +26,9 @@ jobs:
           # Remove trailing slash from BASE_URL if present
           BASE_URL="${BASE_URL%/}"
           
-          FILES_LIST="./tmp/deployed_files_urls.txt"
+          FILES_LIST="./tmp/packages.txt"
           DIRS_LIST="./tmp/directories.txt"
+          TMP_DIRS="./tmp/tmp_dirs.txt"
           
           echo "# Files deployed on $(date)" > $FILES_LIST
           echo "# Base URL: $BASE_URL" >> $FILES_LIST
@@ -35,6 +36,9 @@ jobs:
           
           echo "# Directories for files deployed on $(date)" > $DIRS_LIST
           echo "" >> $DIRS_LIST
+          
+          # Clear temporary directories file
+          > $TMP_DIRS
           
           # Find all files, exclude git files, the tmp directory, README.md and other common non-content files
           find . -type f \
@@ -54,19 +58,24 @@ jobs:
             # Add URL to the files list
             echo "$BASE_URL/$rel_path" >> $FILES_LIST
             
-            # Extract directory structure and convert forward slashes to backslashes
+            # Extract directory structure and add to temporary file
             dir_path=$(dirname "$rel_path")
             if [ "$dir_path" != "." ]; then
-              # Replace forward slashes with backslashes and add to directories list
-              echo "${dir_path//\//\\}" >> $DIRS_LIST
-            else
-              # If file is in root directory, add an empty line to keep the lists in sync
-              echo "" >> $DIRS_LIST
+              # Replace forward slashes with backslashes and add to temporary directories file
+              echo "${dir_path//\//\\}" >> $TMP_DIRS
             fi
           done
           
+          # Remove duplicates from directories and sort
+          if [ -s $TMP_DIRS ]; then
+            sort -u $TMP_DIRS >> $DIRS_LIST
+          fi
+          
+          # Clean up temporary file
+          rm -f $TMP_DIRS
+          
           echo "Generated URLs list with $(grep -c "^$BASE_URL" $FILES_LIST) files"
-          echo "Generated directories list with $(grep -v "^$" $DIRS_LIST | wc -l) directories"
+          echo "Generated directories list with $(grep -v "^$" $DIRS_LIST | wc -l) unique directories"
           
           # Optional: Display first few lines for debugging
           echo "Sample URLs:"
